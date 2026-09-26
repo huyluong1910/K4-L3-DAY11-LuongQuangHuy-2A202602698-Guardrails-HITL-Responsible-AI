@@ -93,6 +93,28 @@ def detect_injection(user_input: str) -> InputStatus:
         r"bạn\s+là\s+DAN",
     ]
 
+    # Strict sensitive keyword & security boundary patterns
+    STRICT_SENSITIVE_PATTERNS = [
+        r"\bapi\b",
+        r"\bapi[_\s-]*key\b",
+        r"\bpasswords?\b|\bmật\s*khẩu\b",
+        r"\badmin(?:istrator)?\b|\bquản\s*trị\s*viên\b",
+        r"\bsecrets?\b|\bbí\s*mật\b",
+        r"\bcredentials?\b",
+        r"\btokens?\b",
+        r"\bdatabase\b|\bdb[_\s-]*host\b|\bmáy\s*chủ\s*(?:cơ\s*sở\s*dữ\s*liệu|nội\s*bộ)\b",
+        r"\bconnection\s*strings?\b",
+        r"\bconfigs?\b|\bconfigurations?\b|\bcấu\s*hình\s*(?:hệ\s*thống|nội\s*bộ|máy\s*chủ)\b",
+        r"\binternal\b|\bnội\s*bộ\b",
+        r"\broot\b",
+        r"\bexploit\b|\bhacks?\b|\bjailbreaks?\b",
+        r"\bsk-[a-zA-Z0-9-]{6,}\b",
+    ]
+
+    for pattern in STRICT_SENSITIVE_PATTERNS:
+        if re.search(pattern, text, re.IGNORECASE):
+            return "BLOCK"
+
     for pattern in INJECTION_PATTERNS:
         if re.search(pattern, text, re.IGNORECASE):
             return "BLOCK"
