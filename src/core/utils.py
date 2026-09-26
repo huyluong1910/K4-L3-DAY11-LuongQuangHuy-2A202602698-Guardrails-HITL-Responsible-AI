@@ -44,13 +44,28 @@ async def chat_with_agent(agent, runner, user_message: str, session_id=None):
         parts=[types.Part.from_text(text=user_message)],
     )
 
-    final_response = ""
-    async for event in runner.run_async(
-        user_id=user_id, session_id=session.id, new_message=content
-    ):
-        if hasattr(event, "content") and event.content and event.content.parts:
-            for part in event.content.parts:
-                if hasattr(part, "text") and part.text:
-                    final_response += part.text
+    import asyncio
+    import re
 
-    return final_response, session
+    for attempt in range(5):
+        try:
+            final_response = ""
+            async for event in runner.run_async(
+                user_id=user_id, session_id=session.id, new_message=content
+            ):
+                if hasattr(event, "content") and event.content and event.content.parts:
+                    for part in event.content.parts:
+                        if hasattr(part, "text") and part.text:
+                            final_response += part.text
+            return final_response, session
+        except Exception as e:
+            err_str = str(e)
+            if ("429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower()) and attempt < 4:
+                match = re.search(r"retry in (\d+(?:\.\d+)?)s", err_str, re.IGNORECASE)
+                delay = float(match.group(1)) + 2.0 if match else 25.0
+                await asyncio.sleep(delay)
+                continue
+            if ("503" in err_str or "UNAVAILABLE" in err_str or "high demand" in err_str.lower()) and attempt < 4:
+                await asyncio.sleep(3 * (attempt + 1))
+                continue
+            raise e

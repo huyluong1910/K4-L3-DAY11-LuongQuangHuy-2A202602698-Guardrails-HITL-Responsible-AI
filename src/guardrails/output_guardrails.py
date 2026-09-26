@@ -41,12 +41,13 @@ def content_filter(response: str) -> dict:
 
     # PII patterns to check
     PII_PATTERNS = {
-        # TODO: Add regex patterns for:
-        # - VN phone number: r"0\d{9,10}"
-        # - Email: r"[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}"
-        # - National ID (CMND/CCCD): r"\b\d{9}\b|\b\d{12}\b"
-        # - API key pattern: r"sk-[a-zA-Z0-9-]+"
-        # - Password pattern: r"password\s*[:=]\s*\S+"
+        "phone": r"(?:\+84|0)(?:3|5|7|8|9)\d{8}\b|\b0\d{9,10}\b",
+        "email": r"[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}",
+        "national_id": r"\b\d{9}\b|\b\d{12}\b",
+        "api_key": r"sk-[a-zA-Z0-9-]{8,}",
+        "password_assignment": r"(?:password|mật\s*khẩu)\s*[:=]\s*\S+",
+        "admin_password": r"\badmin123\b",
+        "db_host": r"db\.vinbank\.internal(?::\d+)?",
     }
 
     for name, pattern in PII_PATTERNS.items():
@@ -172,16 +173,27 @@ class OutputGuardrailPlugin(base_plugin.BasePlugin):
         if not response_text:
             return llm_response
 
-        # TODO: Implement logic:
-        # 1. Call content_filter(response_text)
-        #    - If issues found: replace llm_response.content with redacted version
-        #    - Increment self.redacted_count
-        # 2. If use_llm_judge: call llm_safety_check(response_text)
-        #    - If unsafe: replace llm_response.content with a safe message
-        #    - Increment self.blocked_count
-        # 3. Return llm_response (possibly modified)
+        filt = content_filter(response_text)
+        if not filt["safe"]:
+            self.redacted_count += 1
+            if hasattr(llm_response, "content") and llm_response.content:
+                llm_response.content = types.Content(
+                    role="model",
+                    parts=[types.Part.from_text(text=filt["redacted"])],
+                )
 
-        return llm_response  # TODO: modify if needed
+        if self.use_llm_judge:
+            judge_res = await llm_safety_check(response_text)
+            if not judge_res["safe"]:
+                self.blocked_count += 1
+                safe_msg = "Phản hồi này không thể hiển thị do chứa nội dung không an toàn."
+                if hasattr(llm_response, "content") and llm_response.content:
+                    llm_response.content = types.Content(
+                        role="model",
+                        parts=[types.Part.from_text(text=safe_msg)],
+                    )
+
+        return llm_response
 
 
 # ============================================================
